@@ -1,0 +1,14 @@
+[package]
+name = 'nonmemtools'
+version = '0.1.0'
+edition = '2021'
+
+[lib]
+# need rlib so can pull into integration tests
+crate-type = [ 'staticlib', 'rlib' ]
+name = 'nonmemtools'
+path = "src/lib.rs"
+
+[dependencies]
+extendr-api = '*'
+nom = "7.1.3"
