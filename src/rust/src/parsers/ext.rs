@@ -42,8 +42,8 @@ fn parse_float(line: &str) -> Vec<f64> {
 
 #[derive(Debug, PartialEq)]
 pub struct TerminationStatus {
-    status: i32,
-    codes: Vec<i32>,
+    pub status: i32,
+    pub codes: Vec<i32>,
 }
 
 pub fn parse_error_codes(line: &str) -> TerminationStatus {
@@ -99,10 +99,10 @@ pub fn parse_error_codes(line: &str) -> TerminationStatus {
 // 8,9,10,11,12,24,40: reduced stochastic/sationary portion was not completed prior to user
 // interrupt
 
+
 #[derive(Debug, PartialEq)]
-pub struct ExtTableResultsOutput {
+pub struct ExtEstimationResults {
     pub title: String,
-    pub names: Vec<String>,
     pub estimates: Vec<f64>,
     // TODO: determine if this is always present in the ext file??
     pub std_errors: Option<Vec<f64>>,
@@ -113,23 +113,41 @@ pub struct ExtTableResultsOutput {
     pub partial_derivative: Option<Vec<f64>>,
 }
 
+
+#[derive(Debug, PartialEq)]
+pub struct ExtTableResultsOutput {
+    pub names: Vec<String>,
+    pub data: Vec<ExtEstimationResults>,
+}
+
+impl ExtEstimationResults {
+    pub fn new() -> Self {
+        Self {
+            title: String::new(),
+            estimates: Vec::new(),
+            std_errors: None,
+            eigenvalues: None,
+            condition_number: 0.0,
+            fixed: Vec::new(),
+            termination_status: TerminationStatus {
+                status: 0,
+                codes: Vec::new(),
+            },
+            partial_derivative: None,
+        }
+    }
+} 
+
 pub fn parse_ext_file(file: &Path) -> Result<ExtTableResultsOutput, Box<dyn error::Error>> {
     let file = File::open(file)?;
     let mut reader = BufReader::new(file);
     let mut output = ExtTableResultsOutput {
-        title: String::new(),
         names: Vec::new(),
-        estimates: Vec::new(),
-        std_errors: None,
-        eigenvalues: None,
-        condition_number: 0.0,
-        fixed: Vec::new(),
-        termination_status: TerminationStatus {
-            status: 0,
-            codes: Vec::new(),
-        },
-        partial_derivative: None,
-    };
+        data: Vec::new(),
+    }; 
+
+    let mut estimation_index: usize = 0; 
+    let mut started = false;
     let mut line = String::new();
     loop {
         line.clear();
@@ -140,28 +158,42 @@ pub fn parse_ext_file(file: &Path) -> Result<ExtTableResultsOutput, Box<dyn erro
         if line.starts_with(" ITER") {
             output.names = parse_title(&line)
         } else if line.starts_with("TABLE") {
-            output.title = line.clone()
+            // since we're starting at index 0, we can't increment the first one
+            if !started {
+                started = true;
+            } else {
+                estimation_index += 1;
+            }
+            output.data.push(ExtEstimationResults::new());
+            output.data[estimation_index].title = line.clone()
         } else if line.starts_with("  -1000000000") {
-            output.estimates = parse_float(&line);
+            output.data[estimation_index].estimates = parse_float(&line);
         } else if line.starts_with("  -1000000001") {
             let std_errors = parse_float(&line);
-            output.std_errors = Some(std_errors);
+            output.data[estimation_index].std_errors = Some(std_errors);
         } else if line.starts_with("  -1000000002") {
-            output.eigenvalues = Some(parse_float(&line));
+            output.data[estimation_index].eigenvalues = Some(parse_float(&line));
         } else if line.starts_with("  -1000000003") {
-            output.condition_number = parse_float(&line)[1];
+            output.data[estimation_index].condition_number = parse_float(&line)[1];
         } else if line.starts_with("  -1000000004") {
             continue;
         } else if line.starts_with("  -1000000005") {
             continue
         } else if line.starts_with("  -1000000006") {
-            output.fixed = parse_to_int(&line).iter().map(|&x| x == 1).collect();
+            output.data[estimation_index].fixed = parse_to_int(&line).iter().map(|&x| x == 1).collect();
         } else if line.starts_with("  -1000000007") {
             let error_status = parse_error_codes(&line);
-            output.termination_status = error_status;
+            output.data[estimation_index].termination_status = error_status;
         } else if line.starts_with("  -1000000008") {
-            output.partial_derivative = Some(parse_float(&line));
+            output.data[estimation_index].partial_derivative = Some(parse_float(&line));
         }
+    }
+    if !started {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "No data found in file",
+        )
+        .into());
     }
     Ok(output)
 }

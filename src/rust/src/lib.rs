@@ -24,9 +24,9 @@ fn parse_ext_file_impl(path: &str) -> Robj {
         return Robj::from(format!("Error parsing file: {}", ext_result.err().unwrap()));
     }
     let ext_result = ext_result.unwrap();
-
-    let (has_stderr, std_errors) = match ext_result.std_errors {
-        Some(_) => (true, ext_result.std_errors.unwrap()),
+    let last_index = ext_result.data.len() - 1;
+    let (has_stderr, std_errors) = match ext_result.data[last_index].std_errors {
+        Some(_) => (true, ext_result.data[last_index].std_errors.clone().unwrap()),
         None => (false, Vec::new()),
     };
     for i in 0..ext_result.names.len() {
@@ -40,9 +40,9 @@ fn parse_ext_file_impl(path: &str) -> Robj {
         }
         all_parameters.push(ParameterRow {
             parameter: ext_result.names[i].to_string(),
-            estimate: ext_result.estimates[i],
+            estimate: ext_result.data[last_index].estimates[i],
             stderr: stderr,
-            fixed: ext_result.fixed[i],
+            fixed: ext_result.data[last_index].fixed[i],
         });
     }
     match all_parameters.into_dataframe() {
