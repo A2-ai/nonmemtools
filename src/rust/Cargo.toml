@@ -11,4 +11,5 @@ path = "src/lib.rs"
 
 [dependencies]
 extendr-api = '*'
+itertools = "0.12.1"
 nom = "7.1.3"
